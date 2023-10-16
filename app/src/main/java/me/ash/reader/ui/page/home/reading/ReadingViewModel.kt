@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.ItemSnapshotList
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +17,16 @@ import me.ash.reader.domain.model.article.ArticleFlowItem
 import me.ash.reader.domain.model.article.ArticleWithFeed
 import me.ash.reader.infrastructure.rss.RssHelper
 import me.ash.reader.domain.service.RssService
+import me.ash.reader.ui.page.home.HomeViewModel
+import me.ash.reader.ui.page.home.ReadingState
 import javax.inject.Inject
+
+enum class ArticleSwipeDirection {
+    Right,
+    Left,
+    Down,
+    Default
+}
 
 @HiltViewModel
 class ReadingViewModel @Inject constructor(
@@ -27,11 +37,49 @@ class ReadingViewModel @Inject constructor(
     private val _readingUiState = MutableStateFlow(ReadingUiState())
     val readingUiState: StateFlow<ReadingUiState> = _readingUiState.asStateFlow()
 
-    fun initData(articleId: String) {
+    fun trySwitchArticle(dir: ArticleSwipeDirection, readingState: ReadingState) {
+        val getDirectionArticle = { id: String?, forward: Boolean ->
+            var result = ""
+
+            if (id != null) {
+                var last = ""
+                for (s in readingState.readingList) {
+                    if (s == id && !forward) {
+                        result = last
+                        break
+                    } else if (last == id && forward) {
+                        result = s
+                        break
+                    }
+
+                    last = s
+                }
+            }
+
+            result
+        }
+        var targetId = ""
+        if (dir == ArticleSwipeDirection.Right) {
+            targetId = getDirectionArticle(readingUiState.value.articleWithFeed?.article?.id, true)
+        } else {
+            targetId = getDirectionArticle(readingUiState.value.articleWithFeed?.article?.id, false)
+        }
+
+        viewModelScope.launch {
+            delay(100)
+            if (targetId.isNotEmpty()) {
+                initData(targetId, dir)
+            }
+        }
+    }
+
+    fun initData(articleId: String,
+                 swipeDirection: ArticleSwipeDirection = ArticleSwipeDirection.Default) {
         showLoading()
         viewModelScope.launch {
             _readingUiState.update {
-                it.copy(articleWithFeed = rssService.get().findArticleById(articleId))
+                it.copy(articleWithFeed = rssService.get().findArticleById(articleId),
+                    swipeDirection = swipeDirection)
             }
             _readingUiState.value.articleWithFeed?.let {
                 if (it.feed.isFullContent) internalRenderFullContent()
@@ -135,28 +183,40 @@ class ReadingViewModel @Inject constructor(
         }
     }
 
-    fun recorderNextArticle(pagingItems: ItemSnapshotList<ArticleFlowItem>) {
+    fun recorderNextArticle(pagingItems: ItemSnapshotList<ArticleFlowItem>,
+                            homeViewModel: HomeViewModel) {
         if (pagingItems.size > 0) {
             val cur = _readingUiState.value.articleWithFeed?.article
             if (cur != null) {
                 var found = false
+                var last = ""
+                var index = 0
                 for (item in pagingItems) {
                     if (item is ArticleFlowItem.Article) {
                         val itemId = item.articleWithFeed.article.id
                         if (itemId == cur.id) {
                             found = true
                             _readingUiState.update {
-                                it.copy(nextArticleId = "")
+                                it.copy(nextArticleId = "", previousArticleId = last)
                             }
+                            homeViewModel.changeReadingIndex(itemId)
                         } else if (found) {
                             _readingUiState.update {
                                 it.copy(nextArticleId = itemId)
                             }
                             break
                         }
+                        last = itemId
                     }
+                    index++
                 }
             }
+        }
+    }
+
+    fun resetSwipeDirection() {
+        _readingUiState.update {
+            it.copy(swipeDirection = ArticleSwipeDirection.Default)
         }
     }
 }
@@ -168,4 +228,6 @@ data class ReadingUiState(
     val isLoading: Boolean = true,
     val listState: LazyListState = LazyListState(),
     val nextArticleId: String = "",
+    val previousArticleId: String = "",
+    var swipeDirection: ArticleSwipeDirection = ArticleSwipeDirection.Default
 )

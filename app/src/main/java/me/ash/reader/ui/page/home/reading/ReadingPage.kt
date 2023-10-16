@@ -4,11 +4,17 @@ import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -30,6 +36,7 @@ fun ReadingPage(
     val tonalElevation = LocalReadingPageTonalElevation.current
     val readingUiState = readingViewModel.readingUiState.collectAsStateValue()
     val homeUiState = homeViewModel.homeUiState.collectAsStateValue()
+    val readingState = homeViewModel.readingState.collectAsStateValue()
     val isShowToolBar = if (LocalReadingAutoHideToolbar.current.value) {
         readingUiState.articleWithFeed != null && !readingUiState.listState.isScrollDown()
     } else {
@@ -37,13 +44,23 @@ fun ReadingPage(
     }
 
     val pagingItems = homeUiState.pagingData.collectAsLazyPagingItems().itemSnapshotList
-    readingViewModel.recorderNextArticle(pagingItems)
+    readingViewModel.recorderNextArticle(pagingItems, homeViewModel)
+    var swipeOffset by remember {
+        mutableStateOf(0f)
+    }
+    var gestureConsumed by remember {
+        mutableStateOf(false)
+    }
+    val sensitivity = 10
+
 
     LaunchedEffect(Unit) {
         navController.currentBackStackEntryFlow.collect {
             it.arguments?.getString("articleId")?.let { articleId ->
                 if (readingUiState.articleWithFeed?.article?.id != articleId) {
-                    readingViewModel.initData(articleId)
+                    readingViewModel.initData(articleId,
+                        readingUiState.swipeDirection)
+
                 }
             }
         }
@@ -64,7 +81,38 @@ fun ReadingPage(
         content = {
             Log.i("RLog", "TopBar: recomposition")
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            swipeOffset = 0f
+                            gestureConsumed = false
+                        },
+
+                        onHorizontalDrag = { _, dragAmount ->
+                            swipeOffset += dragAmount
+                            when {
+                                swipeOffset > sensitivity -> {
+                                    if (!gestureConsumed) {
+                                        readingViewModel.trySwitchArticle(ArticleSwipeDirection.Left,
+                                            readingState)
+                                        gestureConsumed = true
+                                    }
+                                }
+
+                                swipeOffset < -sensitivity -> {
+                                    if (!gestureConsumed) {
+                                        readingViewModel.trySwitchArticle(ArticleSwipeDirection.Right,
+                                            readingState)
+                                        gestureConsumed = true
+                                    }
+                                }
+                            }
+
+                        })
+                }
+                ) {
                 // Top Bar
                 TopBar(
                     navController = navController,
@@ -81,17 +129,31 @@ fun ReadingPage(
                     AnimatedContent(
                         targetState = readingUiState.content ?: "",
                         transitionSpec = {
-                            slideInVertically(
-                                spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessLow,
-                                )
-                            ) { height -> height / 2 } with slideOutVertically { height -> -(height / 2) } + fadeOut(
-                                spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessLow,
-                                )
-                            )
+                            val dir = readingUiState.swipeDirection
+                            when (dir) {
+                                ArticleSwipeDirection.Left, ArticleSwipeDirection.Right -> {
+                                    val symbol = if (dir == ArticleSwipeDirection.Right) 1 else -1
+                                    slideInHorizontally { width -> symbol * width } + fadeIn() with
+                                            slideOutHorizontally { width -> symbol * (-width) } + fadeOut()
+                                }
+                                ArticleSwipeDirection.Down -> {
+                                    slideInVertically(
+                                        spring(
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessLow,
+                                        )
+                                    ) { height -> height / 2 } with slideOutVertically { height -> -(height / 2) } + fadeOut(
+                                        spring(
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessLow,
+                                        )
+                                    )
+                                }
+                                else -> {
+                                    fadeIn() with fadeOut()
+                                }
+                            }
+
                         }
                     ) { target ->
                         Content(
@@ -126,6 +188,7 @@ fun ReadingPage(
                             }
                         },
                         onFullContent = {
+                            readingViewModel.resetSwipeDirection()
                             if (it) readingViewModel.renderFullContent()
                             else readingViewModel.renderDescriptionContent()
                         },

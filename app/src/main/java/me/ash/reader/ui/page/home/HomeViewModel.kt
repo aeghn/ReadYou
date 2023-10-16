@@ -22,6 +22,9 @@ import me.ash.reader.infrastructure.android.AndroidStringsHelper
 import me.ash.reader.domain.service.SyncWorker
 import me.ash.reader.infrastructure.di.ApplicationScope
 import me.ash.reader.infrastructure.di.IODispatcher
+import me.ash.reader.ui.page.home.flow.FlowUiState
+import java.util.Collections
+import java.util.Deque
 import javax.inject.Inject
 
 @HiltViewModel
@@ -41,6 +44,9 @@ class HomeViewModel @Inject constructor(
     private val _filterUiState = MutableStateFlow(FilterState())
     val filterUiState = _filterUiState.asStateFlow()
 
+    private val _readingState = MutableStateFlow(ReadingState())
+    val readingState = _readingState.asStateFlow()
+
     val syncWorkLiveData = workManager.getWorkInfosByTagLiveData(SyncWorker.WORK_NAME)
 
     fun sync() {
@@ -57,7 +63,34 @@ class HomeViewModel @Inject constructor(
                 filter = filterState.filter,
             )
         }
+
+        updateArticleList(emptyList())
         fetchArticles()
+    }
+
+    fun updateArticleList(list: List<String>) {
+        _readingState.update {
+            it.copy(
+                readingList = list
+            )
+        }
+    }
+
+    fun changeReadingSn(index: Int) {
+        _readingState.update {
+            it.copy(
+                readingIndex = index,
+            )
+        }
+    }
+
+    fun changeReadingIndex(id: String) {
+        _readingState.update {
+            it.copy(
+                readingId = id,
+                readingIndex = -1
+            )
+        }
     }
 
     fun fetchArticles() {
@@ -107,4 +140,10 @@ data class FilterState(
 data class HomeUiState(
     val pagingData: Flow<PagingData<ArticleFlowItem>> = emptyFlow(),
     val searchContent: String = "",
+)
+
+data class ReadingState(
+    val readingIndex: Int = -1,
+    val readingList: List<String> = emptyList(),
+    val readingId: String = "",
 )

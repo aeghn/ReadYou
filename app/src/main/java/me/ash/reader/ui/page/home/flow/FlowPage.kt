@@ -1,5 +1,6 @@
 package me.ash.reader.ui.page.home.flow
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -93,6 +94,24 @@ fun FlowPage(
         }
     }
 
+    LaunchedEffect(pagingItems.itemCount) {
+        val list = pagingItems.itemSnapshotList.map {
+            if (it is ArticleFlowItem.Article) it.articleWithFeed.article.id else ""
+        }.filter {
+            it.isNotEmpty()
+        }.toList()
+        homeViewModel.updateArticleList(list)
+
+        val id = homeViewModel.readingState.value.readingIndex
+        if (id > 0) {
+            scope.launch {
+                flowUiState.listState.scrollToItem(id)
+                homeViewModel.changeReadingIndex("")
+
+            }
+        }
+    }
+
     BackHandler(onSearch) {
         onSearch = false
     }
@@ -109,7 +128,7 @@ fun FlowPage(
                 onSearch = false
                 if (navController.previousBackStackEntry == null) {
                     navController.navigate(RouteName.FEEDS) {
-                        launchSingleTop = true
+                        launchSingleTop = false
                     }
                 } else {
                     navController.popBackStack()
@@ -233,6 +252,7 @@ fun FlowPage(
                         }
                     }
                     ArticleList(
+                        homeViewModel = homeViewModel,
                         pagingItems = pagingItems,
                         isFilterUnread = filterUiState.filter == Filter.Unread,
                         isShowFeedIcon = articleListFeedIcon.value,
@@ -243,7 +263,7 @@ fun FlowPage(
                             navController.navigate("${RouteName.READING}/${it.article.id}") {
                                 launchSingleTop = true
                             }
-                        }
+                        },
                     ) {
                         flowViewModel.markAsRead(
                             groupId = filterUiState.group?.id,

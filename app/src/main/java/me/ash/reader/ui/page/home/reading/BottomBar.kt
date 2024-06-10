@@ -1,20 +1,28 @@
 package me.ash.reader.ui.page.home.reading
 
 import android.view.HapticFeedbackConstants
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Headphones
-import androidx.compose.material.icons.rounded.Article
-import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +34,7 @@ import me.ash.reader.R
 import me.ash.reader.infrastructure.preference.LocalReadingPageTonalElevation
 import me.ash.reader.ui.component.base.CanBeDisabledIconButton
 import me.ash.reader.ui.component.base.RYExtensibleVisibility
+import me.ash.reader.ui.theme.Shapes
 
 @Composable
 fun BottomBar(
@@ -38,6 +47,8 @@ fun BottomBar(
     onStarred: (isStarred: Boolean) -> Unit = {},
     onNextArticle: () -> Unit = {},
     onFullContent: (isFullContent: Boolean) -> Unit = {},
+    pagerTotalSize: Int = 0,
+    pagerCursor: Int = 0
 ) {
     val tonalElevation = LocalReadingPageTonalElevation.current
 
@@ -98,16 +109,20 @@ fun BottomBar(
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         onStarred(!isStarred)
                     }
-                    CanBeDisabledIconButton(
-                        disabled = !isNextArticleAvailable,
-                        modifier = Modifier.size(40.dp),
-                        imageVector = Icons.Rounded.ExpandMore,
-                        contentDescription = "Next Article",
-                        tint = MaterialTheme.colorScheme.outline,
-                    ) {
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        onNextArticle()
-                    }
+                    Text(
+                        text = "${pagerCursor + 1} / ${pagerTotalSize}",
+                        modifier = Modifier
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = Shapes.medium
+                            )
+                            .padding(horizontal = 12.dp, vertical = 5.dp)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = Shapes.medium
+                            )
+                    )
                     CanBeDisabledIconButton(
                         modifier = Modifier.size(36.dp),
                         disabled = true,

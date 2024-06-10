@@ -22,13 +22,14 @@ fun LazyListScope.ArticleList(
     articleListTonalElevation: Int,
     isSwipeEnabled: () -> Boolean = { false },
     isMenuEnabled: Boolean = true,
-    onClick: (ArticleWithFeed) -> Unit = {},
+    onClickWithIndex: (ArticleWithFeed, Int) -> Unit = { _, _ -> },
     onToggleStarred: (ArticleWithFeed, Long) -> Unit = { _, _ -> },
     onToggleRead: (ArticleWithFeed, Long) -> Unit = { _, _ -> },
     onMarkAboveAsRead: ((ArticleWithFeed) -> Unit)? = null,
     onMarkBelowAsRead: ((ArticleWithFeed) -> Unit)? = null,
     onShare: ((ArticleWithFeed) -> Unit)? = null,
 ) {
+    var trueArticleCount = 0;
     // https://issuetracker.google.com/issues/193785330
     // FIXME: Using sticky header with paging-compose need to iterate through the entire list
     //  to figure out where to add sticky headers, which significantly impacts the performance
@@ -40,11 +41,15 @@ fun LazyListScope.ArticleList(
         ) { index ->
             when (val item = pagingItems[index]) {
                 is ArticleFlowItem.Article -> {
+                    val tac = trueArticleCount++;
+
                     SwipeableArticleItem(
                         articleWithFeed = item.articleWithFeed,
                         isFilterUnread = isFilterUnread,
                         articleListTonalElevation = articleListTonalElevation,
-                        onClick = onClick,
+                        onClick = {
+                            onClickWithIndex(it, tac)
+                        },
                         isSwipeEnabled = isSwipeEnabled,
                         isMenuEnabled = isMenuEnabled,
                         onToggleStarred = onToggleStarred,
@@ -69,12 +74,16 @@ fun LazyListScope.ArticleList(
         for (index in 0 until pagingItems.itemCount) {
             when (val item = pagingItems.peek(index)) {
                 is ArticleFlowItem.Article -> {
+                    val tac = trueArticleCount++;
+
                     item(key = key(item), contentType = contentType(item)) {
                         SwipeableArticleItem(
                             articleWithFeed = item.articleWithFeed,
                             isFilterUnread = isFilterUnread,
                             articleListTonalElevation = articleListTonalElevation,
-                            onClick = onClick,
+                            onClick = {
+                                onClickWithIndex(it, tac)
+                            },
                             isSwipeEnabled = isSwipeEnabled,
                             isMenuEnabled = isMenuEnabled,
                             onToggleStarred = onToggleStarred,

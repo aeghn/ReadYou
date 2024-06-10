@@ -33,13 +33,13 @@ import me.ash.reader.infrastructure.preference.LocalOpenLinkSpecificBrowser
 import me.ash.reader.infrastructure.preference.LocalPullToSwitchArticle
 import me.ash.reader.infrastructure.preference.LocalSharedContent
 import me.ash.reader.infrastructure.preference.OpenLinkPreference
+import me.ash.reader.infrastructure.preference.PullToSwitchArticlePreference
 import me.ash.reader.infrastructure.preference.SharedContentPreference
 import me.ash.reader.infrastructure.preference.SwipeEndActionPreference
 import me.ash.reader.infrastructure.preference.SwipeStartActionPreference
 import me.ash.reader.ui.component.base.DisplayText
 import me.ash.reader.ui.component.base.FeedbackIconButton
 import me.ash.reader.ui.component.base.RYScaffold
-import me.ash.reader.ui.component.base.RYSwitch
 import me.ash.reader.ui.component.base.RadioDialog
 import me.ash.reader.ui.component.base.RadioDialogOption
 import me.ash.reader.ui.component.base.Subtitle
@@ -68,6 +68,7 @@ fun InteractionPage(
     var initialFilterDialogVisible by remember { mutableStateOf(false) }
     var swipeStartDialogVisible by remember { mutableStateOf(false) }
     var swipeEndDialogVisible by remember { mutableStateOf(false) }
+    var swipeSwitchDialogVisible by remember { mutableStateOf(false) }
     var openLinkDialogVisible by remember { mutableStateOf(false) }
     var openLinkSpecificBrowserDialogVisible by remember { mutableStateOf(false) }
     var sharedContentDialogVisible by remember { mutableStateOf(false) }
@@ -136,11 +137,18 @@ fun InteractionPage(
                     )
                     SettingItem(
                         title = stringResource(id = R.string.pull_to_switch_article),
-                        onClick = { pullToSwitchArticle.toggle(context, scope) }) {
-                        RYSwitch(activated = pullToSwitchArticle.value) {
-                            pullToSwitchArticle.toggle(context, scope)
-                        }
-                    }
+                        desc = pullToSwitchArticle.toDesc(context),
+                        onClick = {
+                            swipeSwitchDialogVisible = true
+                        }) {}
+
+                    SettingItem(
+                        title = stringResource(R.string.initial_filter),
+                        desc = initialFilter.toDesc(context),
+                        onClick = {
+                            initialFilterDialogVisible = true
+                        },
+                    ) {}
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Subtitle(
@@ -246,6 +254,21 @@ fun InteractionPage(
         },
     ) {
         swipeEndDialogVisible = false
+    }
+
+    RadioDialog(
+        visible = swipeSwitchDialogVisible,
+        title = stringResource(R.string.pull_to_switch_article),
+        options = PullToSwitchArticlePreference.values.map {
+            RadioDialogOption(
+                text = it.toDesc(context),
+                selected = it == pullToSwitchArticle,
+            ) {
+                it.put(context, scope)
+            }
+        },
+    ) {
+        swipeSwitchDialogVisible = false
     }
 
 

@@ -36,8 +36,8 @@ class ReadingViewModel @Inject constructor(
     private val imageDownloader: AndroidImageDownloader
 ) : ViewModel() {
 
-    private val _readingState = MutableStateFlow(ReadingUiState())
-    val readingUiState: StateFlow<ReadingUiState> = _readingState.asStateFlow()
+    private val _readingState = MutableStateFlow(ReadingState())
+    val readingState: StateFlow<ReadingState> = _readingState.asStateFlow()
 
     private var articleIdMap by mutableStateOf(mutableMapOf<Int, String>());
 
@@ -48,6 +48,10 @@ class ReadingViewModel @Inject constructor(
     fun getArticleId(id: Int): String? {
         val sid = articleIdMap[id]
         return sid
+    }
+
+    fun getArticleIdOffset(offset: Int): String? {
+        return getArticleId(_readingState.value.pagerCursor + offset)
     }
 
     private fun getArticlePageCursor(articleId: String): Int? {
@@ -120,11 +124,13 @@ class ReadingViewModel @Inject constructor(
                         isStarred = article.isStarred,
                         isUnread = article.isUnread,
                         rawDescription = article.rawDescription,
-                        fullContent = article.fullContent
+                        fullContent = article.fullContent,
+                        link = article.link,
+                        title = article.title
                     )
                 }
             }
-            readingUiState.value.let {
+            readingState.value.let {
                 if (it.isFeedFullContent) internalRenderFullContent()
                 else renderDescriptionContent()
             }
@@ -151,8 +157,8 @@ class ReadingViewModel @Inject constructor(
         setLoading()
         runCatching {
             rssHelper.parseFullContent(
-                readingUiState.value.link ?: "",
-                readingUiState.value.title ?: ""
+                readingState.value.link ?: "",
+                readingState.value.title ?: ""
             )
         }.onSuccess { content ->
             _readingState.update { it.copy(content = ContentState.FullContent(content = content)) }
@@ -168,7 +174,7 @@ class ReadingViewModel @Inject constructor(
             rssService.get().markAsRead(
                 groupId = null,
                 feedId = null,
-                articleId = readingUiState.value.articleId,
+                articleId = readingState.value.articleId,
                 before = null,
                 isUnread = isUnread,
             )
@@ -183,7 +189,7 @@ class ReadingViewModel @Inject constructor(
     fun updateStarredStatus(isStarred: Boolean) {
         applicationScope.launch(ioDispatcher) {
             _readingState.update { it.copy(isStarred = isStarred) }
-            readingUiState.value.articleId?.let {
+            readingState.value.articleId?.let {
                 rssService.get().markAsStarred(
                     articleId = it,
                     isStarred = isStarred,
@@ -210,7 +216,7 @@ class ReadingViewModel @Inject constructor(
         cursor: Int? = null
     ) {
         val items = pagingItems.items
-        val currentId = articleId ?: readingUiState.value.articleId
+        val currentId = articleId ?: readingState.value.articleId
         val index = items.indexOfFirst { item ->
             item is ArticleFlowItem.Article && item.articleWithFeed.article.id == currentId
         }
@@ -262,9 +268,25 @@ class ReadingViewModel @Inject constructor(
             imageDownloader.downloadImage(url).onSuccess(onSuccess).onFailure(onFailure)
         }
     }
+
+    fun setArticleIdOffset(offset: Int) {
+        val cursor = readingState.value.pagerCursor
+        val articleId = articleIdMap[cursor + offset] ?: return
+        val target = cursor + offset
+
+        if (target >= 0) {
+            _readingState.update {
+                it.copy(
+                    articleId = articleId,
+                    pagerCursor = target
+                )
+            }
+        }
+
+    }
 }
 
-data class ReadingUiState(
+data class ReadingState(
     val articleId: String? = null,
     val link: String? = null,
     val title: String? = null,

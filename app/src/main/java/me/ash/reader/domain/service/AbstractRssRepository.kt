@@ -367,15 +367,15 @@ abstract class AbstractRssRepository(
     }
 
     open suspend fun renameFeed(feed: Feed) {
-       updateFeed(feed)
+        updateFeed(feed)
     }
 
     open suspend fun moveFeed(originGroupId: String, feed: Feed) {
-       updateFeed(feed)
+        updateFeed(feed)
     }
 
     open suspend fun changeFeedUrl(feed: Feed) {
-       updateFeed(feed)
+        updateFeed(feed)
     }
 
     internal suspend fun updateFeed(feed: Feed) {

@@ -9,8 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -18,7 +17,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -32,14 +30,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.paging.compose.collectAsLazyPagingItems
 import me.ash.reader.R
-import me.ash.reader.domain.model.article.ArticleWithFeed
 import me.ash.reader.infrastructure.preference.LocalPullToSwitchArticle
 import me.ash.reader.infrastructure.preference.LocalReadingAutoHideToolbar
 import me.ash.reader.infrastructure.preference.LocalReadingPageTonalElevation
 import me.ash.reader.infrastructure.preference.LocalReadingTextLineHeight
+import me.ash.reader.infrastructure.preference.PullToSwitchArticlePreference
 import me.ash.reader.ui.ext.collectAsStateValue
 import me.ash.reader.ui.ext.showToast
 import me.ash.reader.ui.page.home.HomeViewModel
+import kotlin.math.abs
 
 
 private const val UPWARD = 1
@@ -54,20 +53,24 @@ fun ReadingPage(
     homeViewModel: HomeViewModel,
     readingViewModel: ReadingViewModel = hiltViewModel(),
 ) {
-    val tonalElevation = LocalReadingPageTonalElevation.current
+
     val context = LocalContext.current
-    val isPullToSwitchArticleEnabled = LocalPullToSwitchArticle.current.value
-    val readingUiState = readingViewModel.readingUiState.collectAsStateValue()
+
+    val readingState = readingViewModel.readingState.collectAsStateValue()
 
     val homeUiState = homeViewModel.homeUiState.collectAsStateValue()
+    val tonalElevation = LocalReadingPageTonalElevation.current
 
     var isReaderScrollingDown by remember { mutableStateOf(false) }
     var showFullScreenImageViewer by remember { mutableStateOf(false) }
 
+    val swipeMethod = LocalPullToSwitchArticle.current
+    val useVerticalSwipe = swipeMethod.equals(PullToSwitchArticlePreference.VerticalSwitch)
+
     var currentImageData by remember { mutableStateOf(ImageData()) }
 
     val isShowToolBar = if (LocalReadingAutoHideToolbar.current.value) {
-        readingUiState.articleId != null && !isReaderScrollingDown
+        readingState.articleId != null && !isReaderScrollingDown
     } else {
         true
     }
@@ -91,8 +94,8 @@ fun ReadingPage(
         }
     }
 
-    LaunchedEffect(readingUiState.articleId) {
-        if (readingUiState.articleId != null && readingUiState.isUnread) {
+    LaunchedEffect(readingState.articleId) {
+        if (readingState.articleId != null && readingState.isUnread) {
             readingViewModel.markAsRead()
         }
     }
@@ -110,102 +113,102 @@ fun ReadingPage(
                     navController = navController,
                     isShow = isShowToolBar,
                     windowInsets = WindowInsets(top = paddings.calculateTopPadding()),
-                    title = readingUiState.title ?: "",
-                    link = readingUiState.link ?: "",
+                    title = readingState.title ?: "",
+                    link = readingState.link ?: "",
                     onClose = {
                         navController.popBackStack()
                     },
                 )
 
-                HorizontalViewer(
-                    initCursor = readingUiState.pagerInitCursor,
-                    totalCount = readingUiState.pagerTotal,
-                    currentPage = {
-                        val articleId = readingViewModel.getArticleId(it);
-                        if (articleId != null) {
-                            readingViewModel.updateArticleIdAndCursor(articleId, it)
-                        }
-                    }
-                ) {
-                    val articleId = readingViewModel.getArticleId(it);
+                ReadingViewer(
+                    readerState = readingState,
+                    readingViewModel = readingViewModel,
+                    pagingItems = pagingItems,
+                ) { articleWithFeed ->
+                    val article = articleWithFeed.article;
 
-                    val articleWithFeed by produceState<ArticleWithFeed?>(null) {
-                        // readingViewModel.setLoading()
-                        value = readingViewModel.getArticle(articleId)
-                    }
-
-                    LaunchedEffect(pagingItems.isNotEmpty(), articleId) {
-                        if (articleId != null && pagingItems.isNotEmpty()) {
-                            readingViewModel.insertArticleRelations(
-                                pagingItems,
-                                articleId = articleId,
-                                cursor = it
-                            )
-                        }
-                    }
-
-
-                    if (articleWithFeed != null) {
-                        val article = articleWithFeed!!.article;
-
-                        remember { article }.run {
-                            val content: ContentState = ContentState.Description(
+                    remember { article }.run {
+                        val content: ContentState = if (article.id != readingState.articleId) {
+                            ContentState.Description(
                                 content = article.fullContent
-                                    ?: article.rawDescription ?: ""
+                                    ?: article.rawDescription
+                            )
+                        } else {
+                            readingState.content
+                        }
+                        
+                        val pullToSwitchState =
+                            rememberPullToLoadState(
+                                key = content,
+                                onLoadNext = {
+                                    readingViewModel.setArticleIdOffset(1)
+                                },
+                                onLoadPrevious = {
+                                    readingViewModel.setArticleIdOffset(-1)
+                                }
                             )
 
-                            val listState = rememberSaveable(
-                                inputs = arrayOf(content),
-                                saver = LazyListState.Saver
-                            ) { LazyListState() }
+
+                        val listState = rememberSaveable(
+                            inputs = arrayOf(content),
+                            saver = LazyListState.Saver
+                        ) { LazyListState() }
 
 
-                            CompositionLocalProvider(
-                                LocalOverscrollConfiguration provides
-                                        if (isPullToSwitchArticleEnabled) null else LocalOverscrollConfiguration.current,
-                                LocalTextStyle provides LocalTextStyle.current.run {
-                                    merge(lineHeight = if (lineHeight.isSpecified) (lineHeight.value * LocalReadingTextLineHeight.current).sp else TextUnit.Unspecified)
-                                }
+                        CompositionLocalProvider(
+                            LocalOverscrollConfiguration provides
+                                    if (useVerticalSwipe) null else LocalOverscrollConfiguration.current,
+                            LocalTextStyle provides LocalTextStyle.current.run {
+                                merge(lineHeight = if (lineHeight.isSpecified) (lineHeight.value * LocalReadingTextLineHeight.current).sp else TextUnit.Unspecified)
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pullToLoad(
+                                        state = pullToSwitchState,
+                                        onScroll = { f ->
+                                            if (abs(f) > 2f)
+                                                isReaderScrollingDown = f < 0f
+                                        },
+                                        enabled = useVerticalSwipe
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Content(
-                                        modifier = Modifier
-                                            .padding(paddings),
-                                        content = content.text ?: "",
-                                        feedName = articleWithFeed?.feed?.name ?: "",
-                                        title = title,
-                                        author = author,
-                                        link = link,
-                                        publishedDate = article.date,
-                                        isLoading = content is ContentState.Loading,
-                                        listState = listState,
-                                        onImageClick = { imgUrl, altText ->
-                                            currentImageData = ImageData(imgUrl, altText)
-                                            showFullScreenImageViewer = true
-                                        }
+                                Content(
+                                    modifier = Modifier.padding(paddings),
+                                    content = content.text ?: "",
+                                    feedName = articleWithFeed.feed.name ?: "",
+                                    title = title,
+                                    author = author,
+                                    link = link,
+                                    publishedDate = article.date,
+                                    isLoading = content is ContentState.Loading,
+                                    listState = listState,
+                                    onImageClick = { imgUrl, altText ->
+                                        currentImageData = ImageData(imgUrl, altText)
+                                        showFullScreenImageViewer = true
+                                    }
+                                )
+                                if (swipeMethod.equals(PullToSwitchArticlePreference.VerticalSwitch)) {
+                                    PullToLoadIndicator(
+                                        state = pullToSwitchState,
+                                        canLoadPrevious = readingViewModel.getArticleIdOffset(-1) != null,
+                                        canLoadNext = readingViewModel.getArticleIdOffset(1) != null
                                     )
                                 }
                             }
                         }
-                    } else {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
                     }
                 }
+
                 // Bottom Bar
                 BottomBar(
                     isShow = isShowToolBar,
-                    isUnread = readingUiState.isUnread,
-                    isStarred = readingUiState.isStarred,
+                    isUnread = readingState.isUnread,
+                    isStarred = readingState.isStarred,
                     isNextArticleAvailable = false,
-                    isFullContent = readingUiState.content is ContentState.FullContent,
+                    isFullContent = readingState.content is ContentState.FullContent,
                     onUnread = {
                         readingViewModel.updateReadStatus(it)
                     },
@@ -218,8 +221,8 @@ fun ReadingPage(
                         if (it) readingViewModel.renderFullContent()
                         else readingViewModel.renderDescriptionContent()
                     },
-                    pagerTotalSize = readingUiState.pagerTotal,
-                    pagerCursor = readingUiState.pagerCursor
+                    pagerTotalSize = readingState.pagerTotal,
+                    pagerCursor = readingState.pagerCursor
                 )
             }
         }

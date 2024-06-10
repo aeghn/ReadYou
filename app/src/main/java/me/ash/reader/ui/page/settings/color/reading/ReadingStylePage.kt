@@ -23,7 +23,6 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Segment
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.rounded.Segment
 import androidx.compose.material.icons.rounded.Title
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -47,6 +46,7 @@ import me.ash.reader.infrastructure.preference.LocalReadingDarkTheme
 import me.ash.reader.infrastructure.preference.LocalReadingFonts
 import me.ash.reader.infrastructure.preference.LocalReadingPageTonalElevation
 import me.ash.reader.infrastructure.preference.LocalReadingTheme
+import me.ash.reader.infrastructure.preference.PullToSwitchArticlePreference
 import me.ash.reader.infrastructure.preference.ReadingFontsPreference
 import me.ash.reader.infrastructure.preference.ReadingPageTonalElevationPreference
 import me.ash.reader.infrastructure.preference.ReadingThemePreference
@@ -80,17 +80,23 @@ fun ReadingStylePage(
     val fonts = LocalReadingFonts.current
     val autoHideToolbar = LocalReadingAutoHideToolbar.current
     val pullToSwitchArticle = LocalPullToSwitchArticle.current
+    var swipeSwitchDialogVisible by remember { mutableStateOf(false) }
 
 
     var tonalElevationDialogVisible by remember { mutableStateOf(false) }
     var fontsDialogVisible by remember { mutableStateOf(false) }
 
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let {
-            ExternalFonts(context, it, ExternalFonts.FontType.ReadingFont).copyToInternalStorage()
-            ReadingFontsPreference.External.put(context, scope)
-        } ?: context.showToast("Cannot get activity result with launcher")
-    }
+    val launcher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let {
+                ExternalFonts(
+                    context,
+                    it,
+                    ExternalFonts.FontType.ReadingFont
+                ).copyToInternalStorage()
+                ReadingFontsPreference.External.put(context, scope)
+            } ?: context.showToast("Cannot get activity result with launcher")
+        }
 
     RYScaffold(
         containerColor = MaterialTheme.colorScheme.surface onLight MaterialTheme.colorScheme.inverseOnSurface,
@@ -111,7 +117,8 @@ fun ReadingStylePage(
 
                 // Preview
                 item {
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState())
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
                     ) {
                         Spacer(modifier = Modifier.width(24.dp))
                         ReadingThemePreference.values.map {
@@ -204,11 +211,21 @@ fun ReadingStylePage(
                         onClick = {},
                     ) {}
 
-                    SettingItem(
-                        title = stringResource(id = R.string.pull_to_switch_article),
-                        onClick = { pullToSwitchArticle.toggle(context, scope) }) {
-                        RYSwitch(activated = pullToSwitchArticle.value)
+                    RadioDialog(
+                        visible = swipeSwitchDialogVisible,
+                        title = stringResource(R.string.pull_to_switch_article),
+                        options = PullToSwitchArticlePreference.values.map {
+                            RadioDialogOption(
+                                text = it.toDesc(context),
+                                selected = it == pullToSwitchArticle,
+                            ) {
+                                it.put(context, scope)
+                            }
+                        },
+                    ) {
+                        swipeSwitchDialogVisible = false
                     }
+
                     SettingItem(
                         title = stringResource(R.string.tonal_elevation),
                         desc = "${tonalElevation.value}dp",
@@ -309,5 +326,20 @@ fun ReadingStylePage(
         }
     ) {
         fontsDialogVisible = false
+    }
+
+    RadioDialog(
+        visible = swipeSwitchDialogVisible,
+        title = stringResource(R.string.pull_to_switch_article),
+        options = PullToSwitchArticlePreference.values.map {
+            RadioDialogOption(
+                text = it.toDesc(context),
+                selected = it == pullToSwitchArticle,
+            ) {
+                it.put(context, scope)
+            }
+        },
+    ) {
+        swipeSwitchDialogVisible = false
     }
 }

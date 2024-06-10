@@ -5,9 +5,11 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.RewriteQueriesToDropUnusedColumns
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 import me.ash.reader.domain.model.article.Article
 import me.ash.reader.domain.model.article.ArticleMeta
@@ -445,6 +447,9 @@ interface ArticleDao {
     )
     fun queryImportantCountWhenIsAll(accountId: Int): Flow<List<ImportantNum>>
 
+    @RawQuery
+    fun countImportantByFilter(query: SupportSQLiteQuery): Int
+
     @Transaction
     @Query(
         """
@@ -698,7 +703,12 @@ interface ArticleDao {
         ORDER BY date DESC
         """
     )
-    fun queryMetadataByFeedId(accountId: Int, feedId: String, isUnread: Boolean, before: Date): List<ArticleMeta>
+    fun queryMetadataByFeedId(
+        accountId: Int,
+        feedId: String,
+        isUnread: Boolean,
+        before: Date
+    ): List<ArticleMeta>
 
     @Transaction
     @Query(
@@ -713,7 +723,11 @@ interface ArticleDao {
         ORDER BY a.date DESC
         """
     )
-    fun queryMetadataByGroupIdWhenIsUnread(accountId: Int, groupId: String, isUnread: Boolean): List<ArticleMeta>
+    fun queryMetadataByGroupIdWhenIsUnread(
+        accountId: Int,
+        groupId: String,
+        isUnread: Boolean
+    ): List<ArticleMeta>
 
     @Transaction
     @Query(
@@ -729,7 +743,12 @@ interface ArticleDao {
         ORDER BY a.date DESC
         """
     )
-    fun queryMetadataByGroupIdWhenIsUnread(accountId: Int, groupId: String, isUnread: Boolean, before: Date): List<ArticleMeta>
+    fun queryMetadataByGroupIdWhenIsUnread(
+        accountId: Int,
+        groupId: String,
+        isUnread: Boolean,
+        before: Date
+    ): List<ArticleMeta>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(vararg article: Article)

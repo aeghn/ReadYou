@@ -1,5 +1,6 @@
 package me.ash.reader.ui.page.home.flow
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -97,22 +97,6 @@ fun FlowPage(
 
     val owner = LocalLifecycleOwner.current
     var isSyncing by remember { mutableStateOf(false) }
-
-    val totalArticleSize by remember {
-        var count = if (filterUiState.feed != null) {
-            filterUiState.feed.important
-        } else if (filterUiState.group != null) {
-            filterUiState.group.important
-        } else {
-            filterUiState.filter.index
-        };
-
-        if (count == null) {
-            count = 0;
-        }
-
-        mutableIntStateOf(count)
-    }
 
     DisposableEffect(owner) {
         homeViewModel.syncWorkLiveData.observe(owner) { workInfoList ->
@@ -345,9 +329,15 @@ fun FlowPage(
                         isSwipeEnabled = { listState.isScrollInProgress },
                         onClickWithIndex = { it, cursor ->
                             onSearch = false
-                            navController.navigate(
-                                "${RouteName.READING}/${it.article.id}?cursor=${cursor}&total=${totalArticleSize}") {
-                                launchSingleTop = true
+                            flowViewModel.routeToReadingPage(filterUiState) { totalArticleSize ->
+                                val url =
+                                    "${RouteName.READING}/${it.article.id}?cursor=${cursor}&total=${totalArticleSize}";
+                                Log.i("chin", "url: ${url}")
+                                navController.navigate(
+                                    url
+                                ) {
+                                    launchSingleTop = true
+                                }
                             }
                         },
                         onToggleStarred = onToggleStarred,

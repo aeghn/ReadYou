@@ -2,6 +2,7 @@ package me.ash.reader.ui.page.home.flow
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.paging.compose.LazyPagingItems
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
@@ -11,14 +12,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.ash.reader.domain.model.article.ArticleFlowItem
-import me.ash.reader.domain.model.article.ArticleWithFeed
 import me.ash.reader.domain.model.general.MarkAsReadConditions
 import me.ash.reader.domain.service.RssService
 import me.ash.reader.infrastructure.di.ApplicationScope
 import me.ash.reader.infrastructure.di.IODispatcher
+import me.ash.reader.infrastructure.di.MainDispatcher
+import me.ash.reader.ui.page.home.FilterState
 import java.util.Date
-import java.util.function.BiPredicate
 import javax.inject.Inject
 
 @HiltViewModel
@@ -28,6 +30,8 @@ class FlowViewModel @Inject constructor(
     private val ioDispatcher: CoroutineDispatcher,
     @ApplicationScope
     private val applicationScope: CoroutineScope,
+    @MainDispatcher
+    private val mainDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _flowUiState = MutableStateFlow(FlowUiState())
@@ -95,6 +99,19 @@ class FlowViewModel @Inject constructor(
                 .map { it.id }
                 .toSet()
             rssService.get().batchMarkAsRead(articleIds = articleIdSet, isUnread = false)
+        }
+    }
+
+    fun countImportant(filterState: FilterState): Int {
+        return rssService.get().countImportantCountByFilter(filterState)
+    }
+
+    fun routeToReadingPage(filterState: FilterState, callback: (Int) -> Unit = {}) {
+        viewModelScope.launch(ioDispatcher) {
+            val important = countImportant(filterState)
+            withContext(mainDispatcher) {
+                callback(important)
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ package me.ash.reader.domain.service
 import android.content.Context
 import android.util.Log
 import androidx.paging.PagingSource
+import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.work.CoroutineWorker
 import androidx.work.ListenableWorker
 import androidx.work.WorkManager
@@ -18,6 +19,7 @@ import me.ash.reader.domain.model.account.Account
 import me.ash.reader.domain.model.article.ArticleWithFeed
 import me.ash.reader.domain.model.feed.Feed
 import me.ash.reader.domain.model.feed.FeedWithArticle
+import me.ash.reader.domain.model.general.Filter
 import me.ash.reader.domain.model.group.Group
 import me.ash.reader.domain.model.group.GroupWithFeed
 import me.ash.reader.domain.repository.AccountDao
@@ -31,6 +33,7 @@ import me.ash.reader.infrastructure.rss.RssHelper
 import me.ash.reader.ui.ext.currentAccountId
 import me.ash.reader.ui.ext.decodeHTML
 import me.ash.reader.ui.ext.spacerDollar
+import me.ash.reader.ui.page.home.FilterState
 import java.util.Date
 import java.util.UUID
 
@@ -299,13 +302,65 @@ abstract class AbstractRssRepository(
         }.flowOn(dispatcherDefault)
     }
 
+    fun countImportantCountByFilter(filter: FilterState): Int {
+        val query =
+            StringBuilder("select count(1) from article a left join feed f on a.feedId = f.groupId");
+        var condp = 0;
+        val args = mutableListOf<Any>();
+
+        val link = {
+            when (condp) {
+                0 -> {
+                    query.append(" where ")
+                    condp = 1
+                }
+
+                1 -> {
+                    query.append(" and ")
+                }
+
+                else -> {}
+            }
+        }
+
+        if (filter.filter == Filter.Unread) {
+            link()
+            query.append("a.isUnread = ?")
+            args.add(true)
+        } else if (filter.filter == Filter.Starred) {
+            link()
+            query.append("a.isStarred = ?")
+            args.add(true)
+        }
+
+        if (filter.group != null) {
+            link()
+            query.append("f.groupId = ?")
+            args.add(filter.group.id)
+        }
+
+        if (filter.feed != null) {
+            link()
+            query.append("a.feedId = ?")
+            args.add(filter.feed.id)
+        }
+
+        return articleDao.countImportantByFilter(
+            SimpleSQLiteQuery(
+                query.toString(),
+                args.toTypedArray()
+            )
+        )
+    }
+
     suspend fun findFeedById(id: String): Feed? = feedDao.queryById(id)
 
     suspend fun findGroupById(id: String): Group? = groupDao.queryById(id)
 
     suspend fun findArticleById(id: String): ArticleWithFeed? = articleDao.queryById(id)
 
-    suspend fun isFeedExist(url: String): Boolean = feedDao.queryByLink(context.currentAccountId, url).isNotEmpty()
+    suspend fun isFeedExist(url: String): Boolean =
+        feedDao.queryByLink(context.currentAccountId, url).isNotEmpty()
 
     open suspend fun renameGroup(group: Group) {
         groupDao.update(group)
